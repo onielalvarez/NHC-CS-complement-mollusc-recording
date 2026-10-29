@@ -12,7 +12,7 @@ library(see)
 library(ggplot2)
 library(forcats)
 library(binom)
-
+library(stringr)
 library(smatr)
 library(ggpmisc)
 library(lmodel2)
@@ -21,8 +21,8 @@ library(lmodel2)
 
 # Load your data
 
-filtered_data_taxa_clean <- read_csv("Data/filtered_data_taxa_clean.csv")
-filtered_data_taxa_habitat <- read_csv("Data/filtered_data_taxa_habitat.csv")
+filtered_data_taxa_clean <- read_csv("filtered_data_taxa_clean.csv")
+filtered_data_taxa_habitat <- read_csv("filtered_data_taxa_habitat.csv")
 
 # Pivot your data sets based on the data sources; this will allow a comparison
 # for the recording of species between sources
@@ -35,6 +35,7 @@ summary_colms <- filtered_data_taxa_clean |>
   pivot_wider(names_from = source, values_from = n_records, values_fill = 0)
 
 summary(summary_colms$CS)
+summary(summary_colms$NHC)
 
 model_overall <- lm(log10(CS + 1) ~ log10(NHC + 1), data = summary_colms)
 
@@ -63,7 +64,7 @@ wilcox.test(
 )
 
 # this model obtains a slope, intercept, and 95% confidence interval without requiring one variable to explain the other 
-# (which is what is happening in the lm model), so regardless of which varaiable is response and which is predictor, the slope will 
+# (which is what is happening in the lm model), so regardless of which variable is response and which is predictor, the slope will 
 # be the same. This is not the case with the linear model. 
 # this tells us how the CS counts scale relative to NHC
 sma_overall <- sma(
@@ -131,7 +132,13 @@ sma_habitat <- summary_colms_hab |>
     )
     
     data.frame(
+      group = summary(model)$group,
+      n = summary(model)$n,
+      r2 = summary(model)$r2,
+      pval = summary(model)$pval,
       slope = summary(model)$Slope,
+      Slope_lowCI = summary(model)$Slope_lowCI,
+      Slope_highCI = summary(model)$Slope_highCI,
       intercept = summary(model)$Int
     )
   })
@@ -205,7 +212,8 @@ overall_trend_graph <- ggplot(
   # SMA line
   stat_ma_line(
     se = TRUE,
-    linewidth = 0.8
+    linewidth = 0.8,
+    colour = "black"
   ) +
   
   geom_text(
@@ -217,7 +225,8 @@ overall_trend_graph <- ggplot(
     ),
     inherit.aes = FALSE,
     hjust = 0,
-    size = 3.5
+    size = 4.3,
+    fontface = "italic"
   ) +
   
   labs(
@@ -241,7 +250,65 @@ hab_cols <- c(
   "brackish"    = "#bc177d"
 )
 
-# 4.2- Graph plot for habitat trends
+# 4.2- Create habitat-specific R2 labels from the SMA models
+
+r2_labels_hab <- sma_habitat |>
+  mutate(label = paste0("R² = ", round(r2, 2)))
+
+# 4.3- Habitat trends graph using SMA
+
+habitat_trends_graph <- ggplot(summary_colms_hab, aes(x = log10(NHC + 1), 
+                                                      y = log10(CS + 1))) +
+  # Points
+  geom_point(colour = "darkgrey", alpha = 0.08, size = 0.5) +
+  # 1:1 expected relationship
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "red") +
+  # Habitat-specific SMA lines
+  stat_ma_line(aes(colour = habitat), se = TRUE, linewidth = 0.8) +
+  # Overall SMA trend
+  stat_ma_line(data = summary_colms,
+    aes(x = log10(NHC + 1), y = log10(CS + 1)),
+    inherit.aes = FALSE,
+    se = FALSE,
+    colour = "black",
+    linewidth = 0.3,
+    linetype = "dashed") +
+  # Habitat-specific R2
+  geom_text(
+    data = r2_labels_hab,
+    aes(x = 0.2, y = 5, label = label),
+    inherit.aes = FALSE,
+    hjust = 0,
+    size = 3.5,
+    fontface = "italic") +
+  # Separate panel for each habitat
+  facet_wrap(~habitat,ncol = 2,
+    labeller = as_labeller(c(
+        terrestrial = "Terrestrial",
+        marine = "Marine",
+        freshwater = "Freshwater",
+        brackish = "Brackish"))) +
+  # Habitat colours
+  scale_colour_manual(values = hab_cols) +
+  labs(
+    x = "Natural History Collection records",
+    y = "Citizen Science observations") +
+  theme_light() +
+  theme(
+    legend.position = "none",
+    text = element_text(colour = "black"),
+    axis.title = element_text(colour = "black"),
+    axis.text = element_text(colour = "black"),
+    strip.text = element_text(
+      colour = "black",
+      face = "plain"),
+    strip.background = element_rect(
+      fill = "gray",
+      colour = "black"))
+
+habitat_trends_graph
+
+# Graph plot for habitat trends - without the general trend
 
 habitat_trends_graph <- ggplot(
   summary_colms_hab,
@@ -250,13 +317,11 @@ habitat_trends_graph <- ggplot(
     y = log10(CS + 1)
   )
 ) +
-  
   geom_point(
     colour = "darkgrey",
     alpha = 0.08,
     size = 0.5
   ) +
-  
   # 1:1 line
   geom_abline(
     slope = 1,
@@ -264,26 +329,19 @@ habitat_trends_graph <- ggplot(
     linetype = "dashed",
     colour = "red"
   ) +
-  
   # Habitat-specific SMA
   stat_ma_line(
     aes(colour = habitat),
     se = TRUE,
     linewidth = 0.8
   ) +
-
   facet_wrap(~habitat, ncol = 2) +
-  
   scale_colour_manual(values = hab_cols) +
-  
   labs(
     x = "Natural History Collection records",
     y = "Citizen Science observations"
   ) +
-  
   theme_light() +
   theme(legend.position = "none")
 
 habitat_trends_graph
-
-

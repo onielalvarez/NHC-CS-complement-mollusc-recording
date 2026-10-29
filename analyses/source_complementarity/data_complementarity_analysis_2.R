@@ -15,7 +15,7 @@ library(cowplot)
 filtered_data_spatial_clean <- read.csv("filtered_data_spatial_clean.csv", 
                                  header = TRUE)
 
-## ---------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 # Setting coordinates as a sf object for further maps
 # Creating the grid for the maps and analyses
 # Reassignment of coordinate and map projection to Equal Earth
@@ -50,7 +50,7 @@ sf_data_joined <- st_join(
   join = st_within
 )
 
-## ---------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 # SOURCE COMPLEMENTARITY BIVARIATE MAP
 
 # 1- Summarize NHC records and CS records per cell
@@ -91,30 +91,76 @@ source_comp_legend <- bi_legend(
   dim = 3,
   xlab = "More records NHC",
   ylab = "More records CS",
-  size = 8
-)
+  size = 8) +
+  theme(axis.title = element_text(size = 29))
 
-# DO this If you want to add the grid cells that only have CS or NHC records
+# 4- Create the bivariate map
+
+graticules <- st_graticule(
+  crs = st_crs(8857),
+  datum = st_crs(4326),
+  lon = seq(-180, 180, by = 30),
+  lat = seq(-60, 60, by = 30))
+
+# 5- Create right-side latitude labels
+
+lat_labels <- data.frame(lon = rep(175, 5),
+  lat = c(60, 30, 0, -30, -60),
+  label = c("60°N", "30°N", "0°", "30°S", "60°S"))
+
+lat_labels_sf <- st_as_sf(lat_labels, coords = c("lon", "lat"), crs = 4326) |>
+  st_transform(8857)
+
+# 6- Create bivariate map
+
+source_comp_map <- ggplot() +
+  # Graticules first — behind everything
+  geom_sf(data = graticules, color = "grey70", linewidth = 0.25, fill = NA) +
+  # Countries boundaries
+  geom_sf(data = world_eq, fill = "white", color = "black", linewidth = 0.2) +
+  # Bivariate hexagons
+  geom_sf(data = source_comp_hex_bi, aes(fill = bi_class), alpha = 0.8, color = NA) +
+  bi_scale_fill(pal = "PurpleOr", dim = 3) +
+  coord_sf(crs = st_crs(8857), datum = NA, expand = FALSE, clip = "off") +
+  geom_sf_text(data = lat_labels_sf, aes(label = label), size = 3, hjust = -0.2,
+    color = "black") +
+  bi_theme() +
+  theme(
+    legend.position = "none",
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    plot.margin = margin(t = 5.5, r = 35, b = 5.5, l = 5.5))
+
+source_comp_map
+
+# 6.1- Save the bivariate legend of the map
+
+ggsave(filename = "Figures/Legends/source_comp_bivariate_legend.png", plot = source_comp_legend,
+       width = 5, height = 5, dpi = 300)
+
+# 6.2- Do this if you want to join the bivariate map and legend in one template; 
+# adjust the position of the legend to your liking
+
+source_comp_joined_map <- ggdraw() +
+  draw_plot(source_comp_map) +
+  draw_plot(source_comp_legend,
+            x = -0.025,
+            y = 0.7,
+            width = 0.22,
+            height = 0.22)
+
+source_comp_joined_map
+
+# 6.3- Do this If you want to add the grid cells that only have CS or NHC records
 
 NHC_only_hex <- source_comp_hex_summary |>
   filter(n_NHC > 0, n_CS == 0)
 
 CS_only_hex <- source_comp_hex_summary |>
   filter(n_CS > 0, n_NHC == 0)
-
-# 4- Create the bivariate map
-
-source_comp_map <- ggplot() +
-  geom_sf(data = world_eq, fill = "white", color = "black", linewidth = 0.2) +
-  geom_sf(data = source_comp_hex_bi, aes(fill = bi_class), alpha = 0.8, color = NA) +
-  bi_scale_fill(pal = "PurpleOr", dim = 3) +
-  coord_sf(crs = st_crs(8857)) +
-  bi_theme() +
-  theme(legend.position = "none")
-
-source_comp_map
-
-## DO this If you want to add the grid cells that only have CS or NHC records
 
 source_comp_map_2 <- ggplot() +
   geom_sf(data = NHC_only_hex,
@@ -140,20 +186,7 @@ source_comp_map_2 <- ggplot() +
 
 source_comp_map_2
 
-# 5- Join the bivariate map and legend in one template; adjust the position
-# of the legend to your liking
-
-source_comp_final_map <- ggdraw() +
-  draw_plot(source_comp_map_2) +
-  draw_plot(source_comp_legend,
-            x = -0.025,
-            y = 0.7,
-            width = 0.22,
-            height = 0.22)
-
-source_comp_final_map
-
-## ---------------------------------------------------------------------
+## -----------------------------------------------------------------------------
 # SAMPLING EFFORT BIVARIATE MAP
 # Filter the sf_data_joined for each of the sources being analyzed
 
@@ -199,7 +232,16 @@ smp_eff_hex_summary_NHC <- sf_data_joined |>
 
 # 2- Create a bivariate classification based on one of the hex summary
 
-smp_eff_hex_bi <- smp_eff_hex_summary_CS |>
+smp_eff_hex_bi_CS <- smp_eff_hex_summary_CS |>
+  filter(n_obs > 0, n_species > 0) |>
+  bi_class(
+    x = log_n_obs,
+    y = log_n_species,
+    style = "quantile",
+    dim = 3 # This can be adjusted to be a 3 X 3 classification and so on
+  )
+
+smp_eff_hex_bi_NHC <- smp_eff_hex_summary_NHC |>
   filter(n_obs > 0, n_species > 0) |>
   bi_class(
     x = log_n_obs,
@@ -215,51 +257,75 @@ smp_eff_legend <- bi_legend(
   dim = 3,
   xlab = "More records",
   ylab = "More species",
-  size = 8
-)
+  size = 8) +
+  theme(axis.title = element_text(size = 34))
 
 # 4- Create the bivariate maps
 
 smp_eff_map_CS <- ggplot() +
+  # Graticules — behind continents
+  geom_sf(data = graticules, color = "grey70", linewidth = 0.25) +
+  # Countries
   geom_sf(data = world_eq, fill = "white", color = "black", linewidth = 0.2) +
+  # Bivariate hexagons
   geom_sf(data = smp_eff_hex_bi_CS, aes(fill = bi_class), alpha = 0.8, color = NA) +
+  # Bivariate colors
   bi_scale_fill(pal = "PinkGrn", dim = 3) +
-  coord_sf(crs = st_crs(8857)) +
-  bi_theme() +
-  theme(legend.position = "none")
+  coord_sf(crs = st_crs(8857), datum = NA, expand = FALSE, clip = "off") +
+  # Latitude labels
+  geom_sf_text(data = lat_labels_sf, aes(label = label), size = 3, hjust = -0.2,
+    color = "black") +
+  theme_void() +
+  theme(legend.position = "none", panel.border = element_blank(),
+    plot.margin = margin(
+      t = 5.5,
+      r = 35,
+      b = 5.5,
+      l = 5.5))
 
 smp_eff_map_CS
 
 smp_eff_map_NHC <- ggplot() +
+  # Graticules — behind continents
+  geom_sf(data = graticules, color = "grey70", linewidth = 0.25) +
+  # Countries
   geom_sf(data = world_eq, fill = "white", color = "black", linewidth = 0.2) +
+  # Bivariate hexagons
   geom_sf(data = smp_eff_hex_bi_NHC, aes(fill = bi_class), alpha = 0.8, color = NA) +
+  # Bivariate colors
   bi_scale_fill(pal = "PinkGrn", dim = 3) +
-  coord_sf(crs = st_crs(8857)) +
-  bi_theme() +
-  theme(legend.position = "none")
+  coord_sf(crs = st_crs(8857), datum = NA, expand = FALSE, clip = "off") +
+  # Latitude labels
+  geom_sf_text(data = lat_labels_sf, aes(label = label), size = 3, hjust = -0.2,
+    color = "black") +
+  theme_void() +
+  theme(legend.position = "none",
+    panel.border = element_blank(),
+    plot.margin = margin(
+      t = 5.5,
+      r = 35,
+      b = 5.5,
+      l = 5.5))
 
 smp_eff_map_NHC
 
-# 5- Join the bivariate map and legend in one template; adjust the position
-# of the legend to your liking
+# 4.1- Save the bivariate legend of the map
+
+ggsave(filename = "Figures/Legends/smp_eff_bivariate_legend.png", plot = smp_eff_legend,
+  width = 5, height = 5, dpi = 300)
+
+# 4.2- Do this if you want to Join the bivariate map and legend in one template; 
+# adjust the position of the legend to your liking
 
 final_smp_eff_map_CS <- ggdraw() +
   draw_plot(smp_eff_map_CS) +
-  draw_plot(smp_eff_legend,
-            x = -0.025,
-            y = 0.78,
-            width = 0.22,
-            height = 0.22)
+  draw_plot(smp_eff_legend, x = -0.025, y = 0.78, width = 0.22, height = 0.22)
 
 final_smp_eff_map_CS
 
 final_smp_eff_map_NHC <- ggdraw() +
   draw_plot(smp_eff_map_NHC) +
-  draw_plot(smp_eff_legend,
-            x = -0.025,
-            y = 0.78,
-            width = 0.22,
-            height = 0.22)
+  draw_plot(smp_eff_legend, x = -0.025, y = 0.78, width = 0.22, height = 0.22)
 
 final_smp_eff_map_NHC
 

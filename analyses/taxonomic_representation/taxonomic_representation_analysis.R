@@ -35,29 +35,37 @@ species_presence <- species_source |>
 
 # 1.3 - Count species by class and status
 plot_data <- species_presence |>
-  count(class, status)
+  count(class, status) |>
+  group_by(class) |>
+  mutate(total_species = sum(n)) |>
+  ungroup()
 
 plot_data$status <- factor(plot_data$status,
   levels = c("NHC only", "Both", "CS only"))
+
+plot_data |>
+  distinct(class, total_species) |>
+  arrange(total_species)
 
 # 1.4 - Plot
 
 ggplot(plot_data,
        aes(x = log(n),
-           y = class,
+           y = reorder(class, total_species),
            fill = status)) +
   geom_col(width = 0.9) +
   scale_fill_manual(values = c(
-    "NHC only" = "#33638DFF",
-    "Both"     = "#5AB4AC",
-    "CS only"  = "#70DB65")) +
+    "NHC only" = "#6BAED6",
+    "Both"     = "#5d6166",
+    "CS only"  = "#83f28f")) +
   labs(
     x = "Species count",
     y = NULL,
-    fill = "Species representation:") +
+    fill = "Species representation:"
+  ) +
   theme_classic(base_size = 14) +
   theme(
-    legend.position = c(0.80, 0.90),
+    legend.position = c(0.80, 0.10),
     legend.background = element_rect(fill = "white", colour = "black"),
     legend.title = element_text(face = "bold")
   )

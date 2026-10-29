@@ -14,7 +14,7 @@ library(DHARMa)
 
 # Upload the filtered habitat data frame obtained from the data integration 
 
-filtered_data_taxa_habitat_spatial <- read.csv("Data/filtered_data_taxa_habitat_spatial.csv", 
+filtered_data_taxa_habitat_spatial <- read.csv("filtered_data_taxa_habitat_spatial.csv", 
                                  header = TRUE)
 
 ## ---------------------------------------------------------------------
@@ -52,18 +52,20 @@ habitat_summary_records <- sf_data_joined_hab |>
   st_drop_geometry() |>
   filter(!is.na(hex_id), !is.na(source), !is.na(habitat)) |>
   group_by(hex_id, source, habitat) |>
-  summarise(record_abundance = n(), .groups = "drop")
+  summarise(record_abundance = n(), .groups = "drop") |>
+  mutate(habitat = stringr::str_to_sentence(habitat))
 
 habitat_summary_spp <- sf_data_joined_hab |>
   st_drop_geometry() |>
   filter(!is.na(hex_id), !is.na(source), !is.na(habitat), !is.na(species)) |>
   group_by(hex_id, source, habitat) |>
-  summarise(species_richness = n_distinct(species), .groups = "drop")
+  summarise(species_richness = n_distinct(species), .groups = "drop") |>
+  mutate(habitat = stringr::str_to_sentence(habitat))
 
 ## ------------------------------------------------------------
 ## I f you want the habitat boxplots for each source next to each other; instead of facet
 
-source_cols <- c("NHC" = "#6BAED6", "CS" = "#83f28f")
+source_cols <- c("NHC" = "#33638DFF", "CS" = "#70DB65")
 
 plot_habt_rec <- ggplot(habitat_summary_records,
        aes(x = habitat,
@@ -75,7 +77,11 @@ plot_habt_rec <- ggplot(habitat_summary_records,
   labs(x = "Habitat",
     y = "Record count per grid cell",
     fill = "Source") +
-  theme_bw()
+  theme_bw() +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black")
+  )
 plot_habt_rec
 
 plot_habt_spp <- ggplot(habitat_summary_spp,
@@ -88,33 +94,12 @@ plot_habt_spp <- ggplot(habitat_summary_spp,
   labs(x = "Habitat",
     y = "Species count per grid cell",
     fill = "Source") +
-  theme_bw()
-plot_habt_spp
-
-## -------------------------------------------------------------------
-## I f you want the habitat boxplots for each source not next to each other; and with facet
-
-hab_cols <- c(
-  "terrestrial" = "#439b21",
-  "marine"      = "#1f78b4",
-  "freshwater"  = "#e4d609",
-  "brackish"    = "#bc177d")
-
-plot_facet <- ggplot(habitat_summary,
-       aes(x = habitat,
-           y = log(record_abundance),
-           fill = habitat)) +
-  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
-  facet_wrap(~source) +
-  scale_fill_manual(values = hab_cols) +
-  labs(x = "Habitat",
-    y = "Record count per grid cell") +
   theme_bw() +
-  theme(legend.position = "none")
-
-plot_facet
-
-## -------------------------------------------------------------------
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title = element_text(color = "black")
+  )
+plot_habt_spp
 
 # Wilcox tests
 
@@ -151,6 +136,7 @@ habitat_summary_records %>%
     mean_records = mean(record_abundance, na.rm = TRUE),
     sd_records = sd(record_abundance, na.rm = TRUE),
     median_records = median(record_abundance, na.rm = TRUE),
+    IQR_records = IQR(record_abundance, na.rm = TRUE),
     min_records = min(record_abundance, na.rm = TRUE),
     max_records = max(record_abundance, na.rm = TRUE),
     .groups = "drop"
@@ -184,6 +170,7 @@ habitat_summary_spp %>%
     mean_richness = mean(species_richness, na.rm = TRUE),
     sd_richness = sd(species_richness, na.rm = TRUE),
     median_richness = median(species_richness, na.rm = TRUE),
+    IQR_richness = IQR(species_richness, na.rm = TRUE),
     min_richness = min(species_richness, na.rm = TRUE),
     max_richness = max(species_richness, na.rm = TRUE),
     .groups = "drop"
